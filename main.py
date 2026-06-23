@@ -1,39 +1,39 @@
+# PHASE 2 TEST
 import streamlit as st
 from pypdf import PdfReader
 
-# Page Title
 st.title("Enterprise RAG Assistant")
-st.write("Upload a PDF and ask questions about it.")
+st.write("Upload a PDF and ask questions about the document.")
 
-# Upload PDF
-uploaded_file = st.file_uploader("Upload PDF", type="pdf")
+uploaded_file = st.file_uploader("Upload a PDF", type="pdf")
 
 if uploaded_file:
-
-    # Read PDF
     pdf_reader = PdfReader(uploaded_file)
 
-    # Extract text
     text = ""
 
     for page in pdf_reader.pages:
         text += page.extract_text() or ""
 
-    # Success message
-    st.success("PDF uploaded and text extracted!")
+    st.success("PDF uploaded and text extracted successfully!")
 
-    # Show PDF content preview
     st.subheader("Preview of PDF Content")
-    st.text(text[:1000])
+    st.text_area("Extracted Text", text[:1500], height=250)
 
-    # Ask question
-    question = st.text_input("Ask a question:")
+    question = st.text_input("Ask a question or enter a keyword:")
 
     if question:
+        matches = []
 
-        # Simple keyword search
-        if question.lower() in text.lower():
-            st.success("I found that information in the document.")
+        for line in text.split("\n"):
+            if question.lower() in line.lower():
+                matches.append(line)
+
+        if matches:
+            st.success("Found matching information!")
+
+            for match in matches[:10]:
+                st.write(match)
+
         else:
-            st.warning("I could not find that information in the document.")
-
+            st.warning("No matching information found.")
