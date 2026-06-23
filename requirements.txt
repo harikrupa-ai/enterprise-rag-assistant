@@ -3,3 +3,5 @@ pypdf
 google-generativeai
 python-dotenv
 scikit-learn
+faiss-cpu
+sentence-transformers
