@@ -1,12 +1,18 @@
 import streamlit as st
 from pypdf import PdfReader
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
+from sentence_transformers import SentenceTransformer
+import faiss
+import numpy as np
 
 st.title("Enterprise RAG Assistant")
-st.write("Upload a PDF and ask questions using free vector search.")
+st.write("Upload a PDF and ask questions using semantic vector search.")
 
 uploaded_file = st.file_uploader("Upload a PDF", type="pdf")
+
+
+@st.cache_resource
+def load_embedding_model():
+    return SentenceTransformer("all-MiniLM-L6-v2")
 
 
 def split_into_chunks(text, chunk_size=120):
@@ -14,30 +20,34 @@ def split_into_chunks(text, chunk_size=120):
     chunks = []
 
     for i in range(0, len(words), chunk_size):
-        chunk = " ".join(words[i:i + chunk_size])
-        chunks.append(chunk)
+        chunks.append(" ".join(words[i:i + chunk_size]))
 
     return chunks
 
 
-def find_best_chunks(question, chunks, top_k=3):
-    documents = chunks + [question]
+def build_faiss_index(chunks, model):
+    embeddings = model.encode(chunks)
 
-    vectorizer = TfidfVectorizer(stop_words="english")
-    vectors = vectorizer.fit_transform(documents)
+    embeddings = np.array(embeddings).astype("float32")
 
-    question_vector = vectors[-1]
-    chunk_vectors = vectors[:-1]
+    dimension = embeddings.shape[1]
 
-    similarities = cosine_similarity(question_vector, chunk_vectors).flatten()
+    index = faiss.IndexFlatL2(dimension)
+    index.add(embeddings)
 
-    ranked_indexes = similarities.argsort()[::-1]
+    return index, embeddings
+
+
+def search_similar_chunks(question, chunks, model, index, top_k=3):
+    question_embedding = model.encode([question])
+    question_embedding = np.array(question_embedding).astype("float32")
+
+    distances, indexes = index.search(question_embedding, top_k)
 
     results = []
 
-    for index in ranked_indexes[:top_k]:
-        if similarities[index] > 0:
-            results.append((chunks[index], similarities[index]))
+    for i, idx in enumerate(indexes[0]):
+        results.append((chunks[idx], distances[0][i]))
 
     return results
 
@@ -57,17 +67,20 @@ if uploaded_file:
 
     chunks = split_into_chunks(text)
 
+    with st.spinner("Creating semantic embeddings..."):
+        embedding_model = load_embedding_model()
+        index, embeddings = build_faiss_index(chunks, embedding_model)
+
+    st.success("Vector database created successfully!")
+
     question = st.text_input("Ask a question about the document:")
 
     if question:
-        results = find_best_chunks(question, chunks)
+        results = search_similar_chunks(question, chunks, embedding_model, index)
 
-        if results:
-            st.subheader("Best Matching Sections")
+        st.subheader("Top Semantic Matches")
 
-            for chunk, score in results:
-                st.write(f"Similarity Score: {score:.2f}")
-                st.write(chunk)
-                st.divider()
-        else:
-            st.warning("I could not find relevant information in the document.")
+        for chunk, distance in results:
+            st.write(f"Distance Score: {distance:.2f}")
+            st.write(chunk)
+            st.divider()
