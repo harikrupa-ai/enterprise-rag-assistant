@@ -5,3 +5,5 @@ python-dotenv
 scikit-learn
 faiss-cpu
 sentence-transformers
+transformers
+torchvision
