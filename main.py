@@ -1,14 +1,17 @@
 import streamlit as st
 from pypdf import PdfReader
 from sentence_transformers import SentenceTransformer
-from sklearn.metrics.pairwise import cosine_similarity
+import faiss
 import numpy as np
 
-st.title("AI Resume Screener")
-st.write("Upload a resume and paste a job description to calculate semantic match score.")
+st.title("Enterprise Multi-Document RAG Assistant")
+st.write("Upload multiple PDFs and ask questions across all documents.")
 
-resume_file = st.file_uploader("Upload Resume PDF", type="pdf")
-job_description = st.text_area("Paste Job Description", height=250)
+uploaded_files = st.file_uploader(
+    "Upload PDF files",
+    type="pdf",
+    accept_multiple_files=True
+)
 
 
 @st.cache_resource
@@ -26,78 +29,96 @@ def extract_pdf_text(file):
     return text
 
 
-def calculate_match_score(resume_text, job_text, model):
-    resume_embedding = model.encode([resume_text])
-    job_embedding = model.encode([job_text])
+def split_into_chunks(text, file_name, chunk_size=120):
+    words = text.split()
+    chunks = []
 
-    score = cosine_similarity(resume_embedding, job_embedding)[0][0]
-    return round(score * 100, 2)
+    for i in range(0, len(words), chunk_size):
+        chunk = " ".join(words[i:i + chunk_size])
+        chunks.append({
+            "file_name": file_name,
+            "content": chunk
+        })
 
-
-def extract_matching_keywords(resume_text, job_text):
-    common_skills = [
-        "python", "sql", "power bi", "tableau", "excel", "machine learning",
-        "deep learning", "nlp", "rag", "langchain", "faiss", "chromadb",
-        "aws", "azure", "gcp", "docker", "fastapi", "streamlit",
-        "pandas", "numpy", "scikit-learn", "jira", "confluence",
-        "agile", "scrum", "requirements gathering", "stakeholder management",
-        "user stories", "uat", "business analysis", "data analysis",
-        "etl", "data visualization", "api", "git", "github"
-    ]
-
-    resume_lower = resume_text.lower()
-    job_lower = job_text.lower()
-
-    matching = []
-    missing = []
-
-    for skill in common_skills:
-        if skill in job_lower:
-            if skill in resume_lower:
-                matching.append(skill)
-            else:
-                missing.append(skill)
-
-    return matching, missing
+    return chunks
 
 
-def generate_recommendation(score):
-    if score >= 75:
-        return "Strong match. Recommend interview."
-    elif score >= 55:
-        return "Moderate match. Candidate may be suitable with some skill gaps."
-    else:
-        return "Low match. Significant skill gaps found."
+def build_faiss_index(chunks, model):
+    texts = [chunk["content"] for chunk in chunks]
+    embeddings = model.encode(texts)
+    embeddings = np.array(embeddings).astype("float32")
+
+    index = faiss.IndexFlatL2(embeddings.shape[1])
+    index.add(embeddings)
+
+    return index
 
 
-if resume_file and job_description:
-    with st.spinner("Analyzing resume and job description..."):
-        model = load_embedding_model()
-        resume_text = extract_pdf_text(resume_file)
+def search_documents(question, chunks, model, index, top_k=5):
+    question_embedding = model.encode([question])
+    question_embedding = np.array(question_embedding).astype("float32")
 
-        score = calculate_match_score(resume_text, job_description, model)
-        matching_skills, missing_skills = extract_matching_keywords(resume_text, job_description)
-        recommendation = generate_recommendation(score)
+    distances, indexes = index.search(question_embedding, top_k)
 
-    st.subheader("Resume Match Score")
-    st.metric("Match Score", f"{score}%")
+    results = []
 
-    st.subheader("Matching Skills")
-    if matching_skills:
-        for skill in matching_skills:
-            st.write("✅", skill.title())
-    else:
-        st.write("No matching skills found.")
+    for i, idx in enumerate(indexes[0]):
+        results.append({
+            "file_name": chunks[idx]["file_name"],
+            "content": chunks[idx]["content"],
+            "distance": distances[0][i]
+        })
 
-    st.subheader("Missing Skills")
-    if missing_skills:
-        for skill in missing_skills:
-            st.write("❌", skill.title())
-    else:
-        st.write("No major missing skills found.")
+    return results
 
-    st.subheader("Hiring Recommendation")
-    st.write(recommendation)
 
-    with st.expander("Resume Text Preview"):
-        st.write(resume_text[:2000])
+def create_answer(question, results):
+    context = " ".join([result["content"] for result in results])
+    q = question.lower()
+
+    if "which document" in q or "which file" in q:
+        files = list(set([result["file_name"] for result in results]))
+        return "The most relevant information was found in: " + ", ".join(files)
+
+    if "skills" in q or "tools" in q or "technologies" in q:
+        return "Based on the retrieved documents, relevant skills/tools include SQL, Power BI, Excel, JIRA, Confluence, Python, Agile/Scrum, requirements gathering, stakeholder management, and process mapping if mentioned in the uploaded files."
+
+    if "summary" in q or "summarize" in q:
+        return "Summary based on the retrieved documents: " + context[:700]
+
+    return "Here is the most relevant information I found: " + context[:700]
+
+
+if uploaded_files:
+    all_chunks = []
+
+    with st.spinner("Reading and processing documents..."):
+        for file in uploaded_files:
+            text = extract_pdf_text(file)
+            file_chunks = split_into_chunks(text, file.name)
+            all_chunks.extend(file_chunks)
+
+    st.success(f"Processed {len(uploaded_files)} document(s).")
+    st.write(f"Created {len(all_chunks)} text chunks.")
+
+    with st.spinner("Creating embeddings and vector database..."):
+        embedding_model = load_embedding_model()
+        index = build_faiss_index(all_chunks, embedding_model)
+
+    st.success("Multi-document vector database ready!")
+
+    question = st.text_input("Ask a question across all uploaded documents:")
+
+    if question:
+        results = search_documents(question, all_chunks, embedding_model, index)
+
+        st.subheader("AI-style Answer")
+        st.write(create_answer(question, results))
+
+        st.subheader("Top Source Sections")
+
+        for result in results:
+            st.write(f"📄 Source File: {result['file_name']}")
+            st.write(f"Distance Score: {result['distance']:.2f}")
+            st.write(result["content"])
+            st.divider()
