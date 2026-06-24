@@ -1,17 +1,13 @@
 import streamlit as st
 from pypdf import PdfReader
 from sentence_transformers import SentenceTransformer
-import faiss
-import numpy as np
+from sklearn.metrics.pairwise import cosine_similarity
 
-st.title("Enterprise Multi-Document RAG Assistant")
-st.write("Upload multiple PDFs and ask questions across all documents.")
+st.title("AI Resume Improvement Engine")
+st.write("Upload a resume and paste a job description to get match score, missing skills, and resume improvement suggestions.")
 
-uploaded_files = st.file_uploader(
-    "Upload PDF files",
-    type="pdf",
-    accept_multiple_files=True
-)
+resume_file = st.file_uploader("Upload Resume PDF", type="pdf")
+job_description = st.text_area("Paste Job Description", height=250)
 
 
 @st.cache_resource
@@ -29,96 +25,128 @@ def extract_pdf_text(file):
     return text
 
 
-def split_into_chunks(text, file_name, chunk_size=120):
-    words = text.split()
-    chunks = []
+def calculate_match_score(resume_text, job_text, model):
+    resume_embedding = model.encode([resume_text])
+    job_embedding = model.encode([job_text])
 
-    for i in range(0, len(words), chunk_size):
-        chunk = " ".join(words[i:i + chunk_size])
-        chunks.append({
-            "file_name": file_name,
-            "content": chunk
-        })
-
-    return chunks
+    score = cosine_similarity(resume_embedding, job_embedding)[0][0]
+    return round(score * 100, 2)
 
 
-def build_faiss_index(chunks, model):
-    texts = [chunk["content"] for chunk in chunks]
-    embeddings = model.encode(texts)
-    embeddings = np.array(embeddings).astype("float32")
+def extract_skills(resume_text, job_text):
+    skills = [
+        "python", "sql", "power bi", "tableau", "excel", "machine learning",
+        "deep learning", "nlp", "rag", "llm", "langchain", "faiss", "chromadb",
+        "vector database", "embeddings", "semantic search", "aws", "azure", "gcp",
+        "docker", "kubernetes", "fastapi", "flask", "streamlit", "pandas", "numpy",
+        "scikit-learn", "tensorflow", "pytorch", "jira", "confluence", "agile",
+        "scrum", "requirements gathering", "stakeholder management", "user stories",
+        "uat", "business analysis", "data analysis", "etl", "data visualization",
+        "api", "git", "github", "prompt engineering", "generative ai"
+    ]
 
-    index = faiss.IndexFlatL2(embeddings.shape[1])
-    index.add(embeddings)
+    resume_lower = resume_text.lower()
+    job_lower = job_text.lower()
 
-    return index
+    matching = []
+    missing = []
 
+    for skill in skills:
+        if skill in job_lower:
+            if skill in resume_lower:
+                matching.append(skill)
+            else:
+                missing.append(skill)
 
-def search_documents(question, chunks, model, index, top_k=5):
-    question_embedding = model.encode([question])
-    question_embedding = np.array(question_embedding).astype("float32")
-
-    distances, indexes = index.search(question_embedding, top_k)
-
-    results = []
-
-    for i, idx in enumerate(indexes[0]):
-        results.append({
-            "file_name": chunks[idx]["file_name"],
-            "content": chunks[idx]["content"],
-            "distance": distances[0][i]
-        })
-
-    return results
-
-
-def create_answer(question, results):
-    context = " ".join([result["content"] for result in results])
-    q = question.lower()
-
-    if "which document" in q or "which file" in q:
-        files = list(set([result["file_name"] for result in results]))
-        return "The most relevant information was found in: " + ", ".join(files)
-
-    if "skills" in q or "tools" in q or "technologies" in q:
-        return "Based on the retrieved documents, relevant skills/tools include SQL, Power BI, Excel, JIRA, Confluence, Python, Agile/Scrum, requirements gathering, stakeholder management, and process mapping if mentioned in the uploaded files."
-
-    if "summary" in q or "summarize" in q:
-        return "Summary based on the retrieved documents: " + context[:700]
-
-    return "Here is the most relevant information I found: " + context[:700]
+    return matching, missing
 
 
-if uploaded_files:
-    all_chunks = []
+def generate_recommendation(score):
+    if score >= 75:
+        return "Strong match. This resume is well aligned with the job description."
+    elif score >= 55:
+        return "Moderate match. The resume has relevant experience but should be improved for better alignment."
+    else:
+        return "Low match. The resume needs stronger alignment with the job description."
 
-    with st.spinner("Reading and processing documents..."):
-        for file in uploaded_files:
-            text = extract_pdf_text(file)
-            file_chunks = split_into_chunks(text, file.name)
-            all_chunks.extend(file_chunks)
 
-    st.success(f"Processed {len(uploaded_files)} document(s).")
-    st.write(f"Created {len(all_chunks)} text chunks.")
+def generate_improvement_suggestions(missing_skills):
+    suggestions = []
 
-    with st.spinner("Creating embeddings and vector database..."):
-        embedding_model = load_embedding_model()
-        index = build_faiss_index(all_chunks, embedding_model)
+    for skill in missing_skills[:8]:
+        suggestions.append(f"Add relevant experience or project details related to {skill.title()} if you have it.")
 
-    st.success("Multi-document vector database ready!")
+    if not suggestions:
+        suggestions.append("Resume is well aligned with the listed skills. Improve impact by adding measurable results.")
 
-    question = st.text_input("Ask a question across all uploaded documents:")
+    return suggestions
 
-    if question:
-        results = search_documents(question, all_chunks, embedding_model, index)
 
-        st.subheader("AI-style Answer")
-        st.write(create_answer(question, results))
+def generate_resume_bullets(matching_skills, missing_skills):
+    bullets = []
 
-        st.subheader("Top Source Sections")
+    if "python" in matching_skills or "python" in missing_skills:
+        bullets.append("Built Python-based applications for document processing, semantic search, and automated analysis.")
 
-        for result in results:
-            st.write(f"📄 Source File: {result['file_name']}")
-            st.write(f"Distance Score: {result['distance']:.2f}")
-            st.write(result["content"])
-            st.divider()
+    if "rag" in matching_skills or "rag" in missing_skills:
+        bullets.append("Developed a Retrieval-Augmented Generation system using document chunking, embeddings, and vector search.")
+
+    if "faiss" in matching_skills or "faiss" in missing_skills or "vector database" in matching_skills or "vector database" in missing_skills:
+        bullets.append("Implemented FAISS-based vector search to retrieve relevant document sections using semantic similarity.")
+
+    if "streamlit" in matching_skills or "streamlit" in missing_skills:
+        bullets.append("Designed and deployed an interactive Streamlit web application for AI-powered resume and document analysis.")
+
+    if "sql" in matching_skills:
+        bullets.append("Used SQL to support data analysis, reporting, and business decision-making workflows.")
+
+    if "power bi" in matching_skills:
+        bullets.append("Built Power BI dashboards to track KPIs, business metrics, and operational performance.")
+
+    if not bullets:
+        bullets.append("Improved business workflows by analyzing requirements, identifying gaps, and delivering data-driven solutions.")
+
+    return bullets
+
+
+if resume_file and job_description:
+    with st.spinner("Analyzing resume and job description..."):
+        model = load_embedding_model()
+        resume_text = extract_pdf_text(resume_file)
+
+        score = calculate_match_score(resume_text, job_description, model)
+        matching_skills, missing_skills = extract_skills(resume_text, job_description)
+        recommendation = generate_recommendation(score)
+        suggestions = generate_improvement_suggestions(missing_skills)
+        resume_bullets = generate_resume_bullets(matching_skills, missing_skills)
+
+    st.subheader("Resume Match Score")
+    st.metric("Match Score", f"{score}%")
+
+    st.subheader("Matching Skills")
+    if matching_skills:
+        for skill in matching_skills:
+            st.write("✅", skill.title())
+    else:
+        st.write("No matching skills found.")
+
+    st.subheader("Missing Skills")
+    if missing_skills:
+        for skill in missing_skills:
+            st.write("❌", skill.title())
+    else:
+        st.write("No major missing skills found.")
+
+    st.subheader("Hiring Recommendation")
+    st.write(recommendation)
+
+    st.subheader("Resume Improvement Suggestions")
+    for suggestion in suggestions:
+        st.write("💡", suggestion)
+
+    st.subheader("Suggested Resume Bullet Points")
+    for bullet in resume_bullets:
+        st.write("•", bullet)
+
+    with st.expander("Resume Text Preview"):
+        st.write(resume_text[:2000])
