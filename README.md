@@ -31,5 +31,24 @@ AI-powered resume analysis platform using Python, Streamlit, Sentence Transforme
 6. Display match scores and recommendations
 
 ## Run Locally
+
 pip install -r requirements.txt
+
 streamlit run main.py
+
+## Screenshots
+
+### Homepage
+![Homepage](screenshots/homepage.png)
+
+### Analysis Dashboard
+![Analysis Dashboard](screenshots/match-score-ats.png)
+
+### Match Score & ATS Analysis
+![Match Score](screenshots/analysis-dashboard.png)
+
+### Resume Improvement Suggestions
+![Resume Suggestions](screenshots/resume-suggestions.png)
+
+### Interview Preparation Dashboard
+![Interview Questions](screenshots/interview-questions.png)
