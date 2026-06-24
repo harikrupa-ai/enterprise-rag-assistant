@@ -119,21 +119,21 @@ This project demonstrates practical applications of Natural Language Processing 
 
 ![Homepage](screenshots/homepage.png)
 
-### Resume Upload & Analysis Dashboard
+### Analysis Dashboard
 
-![Analysis Dashboard](screenshots/1.png)
+![Analysis Dashboard](screenshots/analysis-dashboard.png)
 
 ### Match Score & ATS Analysis
 
-![Match Score](screenshots/2.png)
+![Match Score ATS](screenshots/match-score-ats.png)
 
 ### Resume Improvement Suggestions
 
-![Resume Suggestions](screenshots/3.png)
+![Resume Suggestions](screenshots/resume-suggestions.png)
 
 ### Interview Preparation Dashboard
 
-![Interview Questions](screenshots/4.png)
+![Interview Questions](screenshots/interview-questions.png)
 
 ---
 
@@ -200,26 +200,8 @@ streamlit run main.py
 
 ## Author
 
-Aravind Kumar Anumagalla
+Hari Krupa Cheguri
 
-Master's in Computer Science
+Master of Science in Business Analytics
 
 AI Engineer | Machine Learning | Generative AI | NLP
-
-
-## Screenshots
-
-### Homepage
-![Homepage](screenshots/homepage.png)
-
-### Analysis Dashboard
-![Analysis Dashboard](screenshots/match-score-ats.png)
-
-### Match Score & ATS Analysis
-![Match Score](screenshots/analysis-dashboard.png)
-
-### Resume Improvement Suggestions
-![Resume Suggestions](screenshots/resume-suggestions.png)
-
-### Interview Preparation Dashboard
-![Interview Questions](screenshots/interview-questions.png)
