@@ -3,8 +3,17 @@ from pypdf import PdfReader
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 
-st.title("AI Interview Preparation Engine")
-st.write("Upload your resume and paste a job description to generate interview questions and readiness analysis.")
+st.set_page_config(
+    page_title="AI Resume Intelligence Platform",
+    page_icon="🤖",
+    layout="centered"
+)
+
+st.title("AI Resume Intelligence Platform")
+st.write(
+    "Analyze resumes against job descriptions using semantic search, ATS keyword matching, "
+    "resume improvement suggestions, and interview preparation."
+)
 
 resume_file = st.file_uploader("Upload Resume PDF", type="pdf")
 job_description = st.text_area("Paste Job Description", height=250)
@@ -18,156 +27,185 @@ def load_embedding_model():
 def extract_pdf_text(file):
     pdf_reader = PdfReader(file)
     text = ""
-
     for page in pdf_reader.pages:
         text += page.extract_text() or ""
-
     return text
 
 
-def calculate_match_score(resume_text, job_text, model):
+def calculate_semantic_score(resume_text, job_text, model):
     resume_embedding = model.encode([resume_text])
     job_embedding = model.encode([job_text])
-
     score = cosine_similarity(resume_embedding, job_embedding)[0][0]
     return round(score * 100, 2)
 
 
-def get_skill_keywords():
+def get_keywords():
     return [
-        "python", "sql", "machine learning", "nlp", "llm", "generative ai",
-        "rag", "langchain", "faiss", "vector database", "embeddings",
-        "semantic search", "prompt engineering", "aws", "azure", "docker",
-        "fastapi", "streamlit", "pandas", "numpy", "scikit-learn",
-        "power bi", "tableau", "excel", "jira", "confluence", "agile",
-        "scrum", "requirements gathering", "stakeholder management",
-        "user stories", "uat", "business analysis", "data analysis",
-        "git", "github"
+        "python", "sql", "machine learning", "deep learning", "nlp", "llm",
+        "generative ai", "rag", "retrieval augmented generation", "langchain",
+        "faiss", "chromadb", "vector database", "embeddings", "semantic search",
+        "prompt engineering", "aws", "azure", "gcp", "docker", "kubernetes",
+        "fastapi", "streamlit", "api", "git", "github", "pandas", "numpy",
+        "scikit-learn", "power bi", "tableau", "excel", "jira", "confluence",
+        "agile", "scrum", "requirements gathering", "stakeholder management",
+        "user stories", "uat", "business analysis", "data analysis", "etl",
+        "data visualization"
     ]
 
 
-def analyze_skills(resume_text, job_text):
+def analyze_keywords(resume_text, job_text):
     resume_lower = resume_text.lower()
     job_lower = job_text.lower()
 
+    required = []
     matching = []
     missing = []
 
-    for skill in get_skill_keywords():
-        if skill in job_lower:
-            if skill in resume_lower:
-                matching.append(skill)
+    for keyword in get_keywords():
+        if keyword in job_lower:
+            required.append(keyword)
+            if keyword in resume_lower:
+                matching.append(keyword)
             else:
-                missing.append(skill)
+                missing.append(keyword)
 
-    return matching, missing
-
-
-def interview_readiness_score(match_score, matching_skills, missing_skills):
-    score = match_score
-
-    if len(missing_skills) <= 3:
-        score += 5
-    elif len(missing_skills) >= 8:
-        score -= 10
-
-    if len(matching_skills) >= 6:
-        score += 5
-
-    return max(0, min(100, round(score, 2)))
+    ats_score = round((len(matching) / len(required)) * 100, 2) if required else 0
+    return ats_score, required, matching, missing
 
 
-def generate_technical_questions(matching_skills, missing_skills):
-    questions = []
+def generate_recommendation(semantic_score, ats_score):
+    avg = (semantic_score + ats_score) / 2
 
-    for skill in matching_skills[:6]:
-        questions.append(f"Can you explain your experience with {skill.title()}?")
-
-    for skill in missing_skills[:4]:
-        questions.append(f"How would you approach learning or applying {skill.title()} for this role?")
-
-    questions.extend([
-        "Can you explain the architecture of one technical project from your resume?",
-        "How would you debug a production issue in an AI or data application?",
-        "How would you explain your project to a non-technical stakeholder?"
-    ])
-
-    return questions[:10]
+    if avg >= 75:
+        return "Strong match. This candidate is well aligned with the role."
+    elif avg >= 55:
+        return "Moderate match. The resume has relevant experience but needs keyword and positioning improvements."
+    else:
+        return "Low match. The resume needs stronger alignment with the job description."
 
 
-def generate_behavioral_questions():
+def generate_resume_suggestions(missing_keywords):
+    if not missing_keywords:
+        return ["Resume is well aligned. Add measurable project outcomes to improve impact."]
+
     return [
-        "Tell me about yourself and your background.",
+        f"Add '{keyword.title()}' naturally in your skills, projects, or experience section if you have relevant experience."
+        for keyword in missing_keywords[:8]
+    ]
+
+
+def generate_resume_bullets(matching_keywords, missing_keywords):
+    bullets = []
+
+    if "rag" in missing_keywords or "retrieval augmented generation" in missing_keywords or "rag" in matching_keywords:
+        bullets.append("Built a Retrieval-Augmented Generation application using document chunking, embeddings, semantic search, and vector retrieval.")
+
+    if "faiss" in missing_keywords or "faiss" in matching_keywords or "vector database" in missing_keywords:
+        bullets.append("Implemented FAISS-based vector search to retrieve relevant document sections using sentence embeddings and similarity search.")
+
+    if "streamlit" in missing_keywords or "streamlit" in matching_keywords:
+        bullets.append("Developed an interactive Streamlit web application for resume analysis, ATS optimization, and interview preparation.")
+
+    if "python" in missing_keywords or "python" in matching_keywords:
+        bullets.append("Built Python-based workflows for PDF parsing, skill extraction, semantic matching, and candidate-job analysis.")
+
+    if not bullets:
+        bullets.append("Improved resume-job alignment by identifying skill gaps, matching keywords, and generating targeted improvement suggestions.")
+
+    return bullets
+
+
+def generate_interview_questions(matching_keywords, missing_keywords):
+    technical = []
+
+    for skill in matching_keywords[:5]:
+        technical.append(f"Can you explain your experience with {skill.title()}?")
+
+    for skill in missing_keywords[:5]:
+        technical.append(f"How would you approach learning or applying {skill.title()} for this role?")
+
+    project = [
+        "Explain how your AI Resume Intelligence Platform works end to end.",
+        "Why did you use Sentence Transformers?",
+        "What is FAISS and why is it useful for semantic search?",
+        "How does semantic search differ from keyword search?",
+        "How would you scale this application for multiple users?"
+    ]
+
+    behavioral = [
+        "Tell me about yourself.",
         "Why are you interested in this role?",
         "Tell me about a challenging project you worked on.",
-        "Describe a time you had to work with stakeholders.",
-        "Tell me about a time you had to learn a new tool quickly.",
-        "Describe a time you handled changing requirements.",
-        "Tell me about a time you worked under pressure.",
+        "Describe a time you worked with stakeholders.",
         "Why should we hire you?"
     ]
 
-
-def generate_project_questions():
-    return [
-        "Explain how your Enterprise RAG Assistant works end to end.",
-        "Why did you use Sentence Transformers in your project?",
-        "What is FAISS and why did you use it?",
-        "How does semantic search differ from keyword search?",
-        "How does your resume screener calculate match score?",
-        "What limitations does your current project have?",
-        "How would you scale your project for multiple users?",
-        "How would you improve this project using a production LLM API?"
-    ]
-
-
-def generate_focus_areas(missing_skills):
-    if not missing_skills:
-        return ["Review your projects, metrics, and storytelling before interviews."]
-
-    return [f"Prepare a basic explanation of {skill.title()}." for skill in missing_skills[:6]]
+    return technical[:8], project, behavioral
 
 
 if resume_file and job_description:
-    with st.spinner("Preparing interview analysis..."):
+    with st.spinner("Analyzing resume and job description..."):
         model = load_embedding_model()
         resume_text = extract_pdf_text(resume_file)
 
-        match_score = calculate_match_score(resume_text, job_description, model)
-        matching_skills, missing_skills = analyze_skills(resume_text, job_description)
-        readiness = interview_readiness_score(match_score, matching_skills, missing_skills)
+        semantic_score = calculate_semantic_score(resume_text, job_description, model)
+        ats_score, required_keywords, matching_keywords, missing_keywords = analyze_keywords(
+            resume_text,
+            job_description
+        )
 
-        technical_questions = generate_technical_questions(matching_skills, missing_skills)
-        behavioral_questions = generate_behavioral_questions()
-        project_questions = generate_project_questions()
-        focus_areas = generate_focus_areas(missing_skills)
+        recommendation = generate_recommendation(semantic_score, ats_score)
+        suggestions = generate_resume_suggestions(missing_keywords)
+        bullets = generate_resume_bullets(matching_keywords, missing_keywords)
+        technical_qs, project_qs, behavioral_qs = generate_interview_questions(
+            matching_keywords,
+            missing_keywords
+        )
 
-    st.subheader("Interview Readiness Score")
-    st.metric("Readiness Score", f"{readiness}%")
-    st.write(f"Resume-to-job semantic match score: {match_score}%")
+    st.header("Analysis Dashboard")
 
-    st.subheader("Strong Areas")
-    if matching_skills:
-        for skill in matching_skills:
-            st.write("✅", skill.title())
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric("Semantic Match Score", f"{semantic_score}%")
+    with col2:
+        st.metric("ATS Keyword Score", f"{ats_score}%")
+
+    st.subheader("Hiring Recommendation")
+    st.write(recommendation)
+
+    st.subheader("Matching Keywords")
+    if matching_keywords:
+        for keyword in matching_keywords:
+            st.write("✅", keyword.title())
     else:
-        st.write("No strong keyword matches found.")
+        st.write("No matching keywords found.")
 
-    st.subheader("Focus Areas Before Interview")
-    for area in focus_areas:
-        st.write("⚠️", area)
+    st.subheader("Missing Keywords")
+    if missing_keywords:
+        for keyword in missing_keywords:
+            st.write("❌", keyword.title())
+    else:
+        st.write("No major missing keywords found.")
+
+    st.subheader("Resume Improvement Suggestions")
+    for suggestion in suggestions:
+        st.write("💡", suggestion)
+
+    st.subheader("Suggested Resume Bullet Points")
+    for bullet in bullets:
+        st.write("•", bullet)
 
     st.subheader("Technical Interview Questions")
-    for i, question in enumerate(technical_questions, start=1):
-        st.write(f"{i}. {question}")
+    for i, q in enumerate(technical_qs, start=1):
+        st.write(f"{i}. {q}")
+
+    st.subheader("Project-Based Interview Questions")
+    for i, q in enumerate(project_qs, start=1):
+        st.write(f"{i}. {q}")
 
     st.subheader("Behavioral Interview Questions")
-    for i, question in enumerate(behavioral_questions, start=1):
-        st.write(f"{i}. {question}")
-
-    st.subheader("Project-Based Questions")
-    for i, question in enumerate(project_questions, start=1):
-        st.write(f"{i}. {question}")
+    for i, q in enumerate(behavioral_qs, start=1):
+        st.write(f"{i}. {q}")
 
     with st.expander("Resume Text Preview"):
         st.write(resume_text[:2000])
